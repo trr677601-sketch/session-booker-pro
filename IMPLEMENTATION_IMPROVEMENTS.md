@@ -23,12 +23,12 @@ The schedule's "Book" buttons currently only flash the row. Replace with a shadc
 
 Add Intersection Observer-based fade-in/up animations so sections appear as the user scrolls.
 
-- [ ] Choose approach: lightweight custom hook vs. `framer-motion` vs. CSS + `IntersectionObserver`
-- [ ] Create a reusable `AnimateOnScroll` component or hook
-- [ ] Apply to: Hero stats bar, Trust, Testimonials, Logistics, RepeatCTA
+- [x] Choose approach: lightweight custom hook vs. `framer-motion` vs. CSS + `IntersectionObserver`
+- [x] Create a reusable `AnimateOnScroll` component or hook
+- [x] Apply to: Hero stats bar, Trust, Testimonials, Logistics, RepeatCTA
 - [ ] Animate the stats numbers (10+ years, 1:1, 45/60 min) — count-up effect on entry
-- [ ] Define consistent animation config (duration, easing, stagger delay)
-- [ ] Respect `prefers-reduced-motion` — disable animations for accessibility
+- [x] Define consistent animation config (duration, easing, stagger delay)
+- [x] Respect `prefers-reduced-motion` — disable animations for accessibility
 
 ---
 
@@ -142,7 +142,7 @@ Add a small, fixed bottom bar on mobile with a single "Book Your Session" CTA.
 | # | Improvement | Status |
 |---|-------------|--------|
 | 1 | Booking Modal / Sheet | ☐ |
-| 2 | Scroll-Triggered Animations | ☐ |
+| 2 | Scroll-Triggered Animations | ◐ |
 | 3 | Sticky Schedule Day Tabs | ☐ |
 | 4 | Mobile-Friendly Schedule | ☐ |
 | 5 | Image Lazy Loading & Lightbox | ☐ |
