@@ -1,3 +1,18 @@
+function SentryTestButton() {
+  const handleClick = () => {
+    throw new Error("[Sentry test] Manual test error from SentryTestButton");
+  };
+  return (
+    <button
+      onClick={handleClick}
+      className="fixed bottom-4 right-4 z-50 rounded bg-red-600 px-3 py-1.5 text-[10px] font-medium text-white opacity-30 hover:opacity-100"
+      title="Click to throw a test error for Sentry"
+    >
+      Sentry Test
+    </button>
+  );
+}
+
 export function Footer() {
   return (
     <footer className="bg-background">
@@ -30,6 +45,7 @@ export function Footer() {
           <span>Barcelona, ES</span>
         </div>
       </div>
+      <SentryTestButton />
     </footer>
   );
 }
