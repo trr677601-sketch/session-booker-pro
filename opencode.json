@@ -8,6 +8,20 @@
       "environment": {
         "GITHUB_PERSONAL_ACCESS_TOKEN": "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"
       }
+    },
+    "supabase": {
+      "type": "local",
+      "command": [
+        "npx",
+        "-y",
+        "@supabase/mcp-server-supabase@0.8.2",
+        "--project-ref",
+        "jakowijcslpwcfzvrjle"
+      ],
+      "enabled": true,
+      "environment": {
+        "SUPABASE_ACCESS_TOKEN": "sbp_3355ec6f8f66c5e8cea869b8ff8c212b3daa8566"
+      }
     }
   }
 }
