@@ -14,8 +14,6 @@ import appCss from "../styles.css?url";
 import { initSentry, Sentry } from "../lib/sentry-client";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 
-initSentry();
-
 function NotFoundComponent() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
@@ -129,6 +127,10 @@ function RootShell({ children }: { children: ReactNode }) {
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
+
+  useEffect(() => {
+    initSentry();
+  }, []);
 
   return (
     <QueryClientProvider client={queryClient}>
