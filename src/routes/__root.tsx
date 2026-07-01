@@ -9,6 +9,7 @@ import {
 } from "@tanstack/react-router";
 import { Analytics } from "@vercel/analytics/react";
 import { useEffect, type ReactNode } from "react";
+import { Toaster } from "sonner";
 
 import appCss from "../styles.css?url";
 import { initSentry, Sentry } from "../lib/sentry-client";
@@ -137,6 +138,7 @@ function RootComponent() {
       {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
       <Outlet />
       <Analytics />
+      <Toaster position="top-left" richColors />
     </QueryClientProvider>
   );
 }
