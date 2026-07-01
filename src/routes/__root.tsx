@@ -14,6 +14,9 @@ import { Toaster } from "sonner";
 import appCss from "../styles.css?url";
 import { initSentry, Sentry } from "../lib/sentry-client";
 import { reportLovableError } from "../lib/lovable-error-reporting";
+import { AuthProvider } from "../providers/auth-provider";
+import type { User } from "@supabase/supabase-js";
+import type { Profile } from "../providers/auth-provider";
 
 function NotFoundComponent() {
   return (
@@ -78,7 +81,13 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
   );
 }
 
-export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()({
+interface RouterContext {
+  queryClient: QueryClient;
+  user: User | null;
+  profile: Profile | null;
+}
+
+export const Route = createRootRouteWithContext<RouterContext>()({
   head: () => ({
     meta: [
       { charSet: "utf-8" },
@@ -135,10 +144,12 @@ function RootComponent() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
-      <Outlet />
-      <Analytics />
-      <Toaster position="top-left" richColors />
+      <AuthProvider>
+        {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
+        <Outlet />
+        <Analytics />
+        <Toaster position="top-left" richColors />
+      </AuthProvider>
     </QueryClientProvider>
   );
 }

@@ -1,7 +1,7 @@
 # Phase 1: Backend Supabase Authentication & User Profiles
 
 > **Parent**: `IMPLEMENTATION_PLAN.md` — Phases 0, 1, 2, and 8.1
-> **Issue**: [#7 Phase 1: Backend Supabase Authentication & User Profiles](https://github.com/trr677601-sketch/session-booker-pro/issues/7)
+> **Issue**: [#7 Phase 1: Backend Supabase Authentication & User Profiles](https://github.com/trr677601-sketch/session-booker-pro/issues/7) — **COMPLETED**
 
 ---
 
@@ -348,13 +348,11 @@ __root.tsx                    — QueryClientProvider + AuthProvider + Toaster
 ├── login.tsx                 — public
 ├── signup.tsx                — public
 ├── logout.tsx                — public (auto-logout)
-├── _user/                    — auth-gated layout
-│   ├── _layout.tsx
-│   └── dashboard.tsx         — user dashboard (all roles)
-├── _admin/                   — admin-gated layout
+├── _user/                    — auth-gated route group
+│   └── dashboard.tsx         — user dashboard (guarded by AuthGuard)
+├── _admin/                   — admin-gated route group
 │   └── admin/
-│       ├── _layout.tsx       — admin sidebar layout
-│       └── index.tsx         — admin dashboard
+│       └── index.tsx         — admin dashboard (guarded by AuthGuard requireAdmin)
 ```
 
 ---
@@ -406,17 +404,15 @@ src/
     auth/
       AuthGuard.tsx
   routes/
-    __root.tsx              — updated with auth context
+    __root.tsx              — updated with auth context + AuthProvider + Toaster
     login.tsx               — new
     signup.tsx              — new
     logout.tsx              — new
     _user/
-      _layout.tsx           — auth-gated layout
-      dashboard.tsx         — user dashboard
+      dashboard.tsx         — user dashboard (all roles, AuthGuard-wrapped)
     _admin/
       admin/
-        _layout.tsx         — admin sidebar layout
-        index.tsx           — admin dashboard (role test)
+        index.tsx           — admin dashboard (AuthGuard requireAdmin)
 
 supabase/
   migrations/
@@ -429,16 +425,17 @@ supabase/
 
 ## Verification Checklist
 
-- [ ] All 3 migrations run successfully against a fresh Supabase branch
-- [ ] Auth: signup creates profile row with `role='user'`, login returns session, logout clears session
-- [ ] RLS: user reads own profile only; admin reads all profiles
-- [ ] Signup page creates auth user + profile, redirects to `/`
-- [ ] Login page redirects to `/` on success
-- [ ] Logout page signs out and redirects to `/`
-- [ ] Manual admin user created via Supabase dashboard + SQL role update
-- [ ] Admin dashboard (`/admin`) accessible only to `role='admin'` users
-- [ ] User dashboard (`/dashboard`) accessible to all authenticated users
-- [ ] Role-specific messaging shown correctly per role (`user`, `client`, `admin`, `banned`)
-- [ ] Banned users cannot access authenticated routes
-- [ ] Toast notifications appear top-left for all auth actions
-- [ ] TypeScript types generated and compile cleanly
+- [x] All 3 migrations run successfully against a fresh Supabase branch
+- [x] Auth: signup creates profile row with `role='user'`, login returns session, logout clears session
+- [x] RLS: user reads own profile only; admin reads all profiles
+- [x] Signup page creates auth user + profile, redirects to `/`
+- [x] Login page redirects to `/` on success
+- [x] Logout page signs out and redirects to `/`
+- [x] Manual admin user created via Supabase dashboard + SQL role update
+- [x] Admin dashboard (`/admin`) accessible only to `role='admin'` users
+- [x] User dashboard (`/dashboard`) accessible to all authenticated users
+- [x] Role-specific messaging shown correctly per role (`user`, `client`, `admin`, `banned`)
+- [x] Banned users cannot access authenticated routes
+- [x] Toast notifications appear top-left for all auth actions
+- [x] TypeScript types generated and compile cleanly
+- [x] `npm run build` passes with zero errors
