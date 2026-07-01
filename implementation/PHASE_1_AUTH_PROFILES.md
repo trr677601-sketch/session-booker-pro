@@ -8,12 +8,11 @@
 ## Implementation Order
 
 1. [Project Setup & Dependencies](#step-1--project-setup--dependencies)
-2. [Database Migrations (profiles + login_history + RLS)](#step-2--database-migrations)
+2. [Migrations: profiles + login_history + RLS](#step-2--migrations)
 3. [Supabase Client Setup](#step-3--supabase-client-setup)
-4. [Signup & Login Pages](#step-4--signup--login-pages)
-5. [Mock Admin Dashboard](#step-5--mock-admin-dashboard)
-6. [Mock User Dashboard](#step-6--mock-user-dashboard)
-7. [Manual Admin Creation on Supabase Dashboard](#step-7--manual-admin-creation-on-supabase-dashboard)
+4. [Auth Pages (Login, Signup, Logout)](#step-4--auth-pages)
+5. [Auth Provider & Auth Guard](#step-5--auth-provider--auth-guard)
+6. [Mockup Admin Dashboard & User Dashboard](#step-6--mockup-dashboards)
 
 ---
 
@@ -42,33 +41,15 @@ Add these to `.env.example` and ensure `.env` is in `.gitignore`.
 
 ---
 
-## Step 2 — Database Migrations
+## Step 2 — Migrations
 
 ### 001_profiles.sql
 
 Table: `profiles` — one row per auth user, created via a DB trigger on `auth.users`.
 
-| Column | Type | Notes |
-|--------|------|-------|
-| `id` | `uuid PK` | references `auth.users(id)` |
-| `email` | `text` | copied from auth.users |
-| `full_name` | `text` | |
-| `phone_prefix` | `text nullable` | country code, e.g. `+34` |
-| `phone` | `text nullable` | |
-| `avatar_url` | `text nullable` | Supabase Storage path |
-| `address_line_1` | `text nullable` | |
-| `address_line_2` | `text nullable` | |
-| `postal_code` | `text nullable` | |
-| `city` | `text nullable` | |
-| `county` | `text nullable` | |
-| `country` | `text nullable` | |
-| `role` | `text` | default `'user'` — values: `user`, `client`, `admin`, `banned` |
-| `banned_at` | `timestamptz nullable` | |
-| `ban_reason` | `text nullable` | |
-| `created_at` | `timestamptz` | default `now()` |
-| `updated_at` | `timestamptz` | auto-update via trigger |
-
 ```sql
+-- 001_profiles.sql
+
 CREATE TABLE profiles (
   id            uuid PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
   email         text NOT NULL,
@@ -88,11 +69,8 @@ CREATE TABLE profiles (
   created_at    timestamptz NOT NULL DEFAULT now(),
   updated_at    timestamptz NOT NULL DEFAULT now()
 );
-```
 
-**Trigger: auto-create profile on signup**
-
-```sql
+-- Trigger: auto-create profile on user signup
 CREATE OR REPLACE FUNCTION handle_new_user()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -113,11 +91,8 @@ CREATE OR REPLACE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW
   EXECUTE FUNCTION handle_new_user();
-```
 
-**Trigger: auto-update `updated_at`**
-
-```sql
+-- Trigger: auto-update updated_at on profile changes
 CREATE OR REPLACE FUNCTION auto_update_updated_at()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -132,11 +107,7 @@ CREATE OR REPLACE TRIGGER profiles_updated_at
   BEFORE UPDATE ON profiles
   FOR EACH ROW
   EXECUTE FUNCTION auto_update_updated_at();
-```
 
-**Indexes**
-
-```sql
 CREATE INDEX idx_profiles_role ON profiles(role);
 CREATE INDEX idx_profiles_email ON profiles(email);
 ```
@@ -144,6 +115,8 @@ CREATE INDEX idx_profiles_email ON profiles(email);
 ### 002_login_history.sql
 
 ```sql
+-- 002_login_history.sql
+
 CREATE TABLE login_history (
   id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id       uuid NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
@@ -159,42 +132,41 @@ CREATE INDEX idx_login_history_logged_in_at ON login_history(logged_in_at);
 ### 003_rls_policies.sql
 
 ```sql
+-- 003_rls_policies.sql
+
 ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE login_history ENABLE ROW LEVEL SECURITY;
 
--- Profiles: users read own profile
+-- Profiles: users read own; admins read all
 CREATE POLICY "profiles_read_own"
   ON profiles FOR SELECT
   USING (auth.uid() = id);
 
--- Profiles: admins read all
 CREATE POLICY "profiles_read_all_admin"
   ON profiles FOR SELECT
   USING (EXISTS (
     SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin'
   ));
 
--- Profiles: users update own
+-- Profiles: users update own non-role fields; admins update all
 CREATE POLICY "profiles_update_own"
   ON profiles FOR UPDATE
   USING (auth.uid() = id)
   WITH CHECK (auth.uid() = id);
 
--- Profiles: admins update any
 CREATE POLICY "profiles_update_admin"
   ON profiles FOR UPDATE
   USING (EXISTS (
     SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin'
   ));
 
--- Profiles: admin insert
+-- Profiles: admin insert/delete
 CREATE POLICY "profiles_insert_admin"
   ON profiles FOR INSERT
   WITH CHECK (EXISTS (
     SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin'
   ));
 
--- Profiles: admin delete
 CREATE POLICY "profiles_delete_admin"
   ON profiles FOR DELETE
   USING (EXISTS (
@@ -230,7 +202,7 @@ export function createClient() {
 
 ### `src/lib/supabase/server.ts`
 
-Server-side client using `createServerClient` with cookie handling.
+Server-side client using `createServerClient` with cookie handling for TanStack Start server functions.
 
 ```typescript
 import { createServerClient } from '@supabase/ssr'
@@ -242,17 +214,23 @@ export function createServerSupabase() {
     process.env.VITE_SUPABASE_ANON_KEY!,
     {
       cookies: {
-        getAll() { return parseCookies() },
+        getAll() {
+          return parseCookies()
+        },
         setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value, options }) =>
+          cookiesToSet.forEach(({ name, value, options }) => {
             setCookie(name, value, options)
-          )
+          })
         },
       },
     }
   )
 }
 ```
+
+### `src/lib/supabase/middleware.ts`
+
+TanStack Router auth guard logic (used in route `beforeLoad`).
 
 ### TypeScript Types
 
@@ -264,105 +242,151 @@ npx supabase gen types typescript --project-id <PROJECT_REF> > src/lib/supabase-
 
 ---
 
-## Step 4 — Signup & Login Pages
+## Step 4 — Auth Pages
 
-Build standalone auth pages without a full auth provider context (the pages handle Supabase auth directly for now).
-
-### Route structure
+Build the signup and login pages **before** the auth provider to enable early testing of the Supabase Auth + profiles trigger flow.
 
 | Route | File | Description |
 |-------|------|-------------|
-| `/signup` | `src/routes/signup.tsx` | Name, email, password fields. Calls `supabase.auth.signUp()`. On success, redirects to `/login` with a toast. |
-| `/login` | `src/routes/login.tsx` | Email + password form. Calls `supabase.auth.signInWithPassword()`. On success, redirects to `/dashboard` or `/admin/dashboard` based on role. |
-| `/logout` | `src/routes/logout.tsx` | Calls `supabase.auth.signOut()`, redirects to `/`. |
+| `/signup` | `src/routes/signup.tsx` | Name, email, password fields → creates auth user + profile row via trigger |
+| `/login` | `src/routes/login.tsx` | Email + password form, links to signup |
+| `/logout` | `src/routes/logout.tsx` | Signs out, redirects to `/` |
 
-### signup.tsx
+All three pages use:
+- shadcn form components (Button, Input, Card, etc.)
+- sonner toasts positioned top-left
+- Unique page URLs (no modals)
 
-- Fields: full name, email, password, confirm password
-- On submit: `supabase.auth.signUp({ email, password, options: { data: { full_name } } })`
-- The `handle_new_user` trigger copies `full_name` into the `profiles` row
-- Toast on success: "Account created! Please log in."
-- Link to `/login` for existing users
-
-### login.tsx
-
-- Fields: email, password
-- On submit: `supabase.auth.signInWithPassword({ email, password })`
-- After login, fetch the user's `profiles` row to check `role`:
-  - `admin` → redirect to `/admin/dashboard`
-  - `user` or `client` → redirect to `/dashboard`
-- If banned (`role = 'banned'`), show error toast and stay on login
-- Link to `/signup` for new users
-- Insert a row into `login_history` on successful login
-
-### logout.tsx
-
-- Calls `supabase.auth.signOut()`
-- No UI — immediately redirects to `/`
-
-All pages use shadcn form components (Button, Input, Card) and sonner toasts (top-left).
+**Testing flow**: User signs up → `handle_new_user` trigger creates profile with `role='user'` → user logs in → lands on `/`.
 
 ---
 
-## Step 5 — Mock Admin Dashboard
+## Step 5 — Auth Provider & Auth Guard
 
-### `src/routes/admin/dashboard.tsx`
+### `src/providers/auth-provider.tsx`
 
-A lightweight mockup to verify that authenticted users with `role = 'admin'` can access the admin area.
+React context wrapping Supabase session. Responsibilities:
+- Subscribe to `supabase.auth.onAuthStateChange`
+- Expose: `user`, `profile` (with role), `signIn`, `signUp`, `signOut`, `isAdmin`, `isClient`
+- Fetch/refresh the user's `profiles` row on auth state change
+- Insert into `login_history` on sign-in
 
-- Route: `/admin/dashboard`
-- **Auth guard at top of component**: fetch current session + profile. If not authenticated or `role !== 'admin'`, redirect to `/login`.
-- Page contents:
-  - Heading: "Admin Dashboard"
-  - Stats cards (hardcoded mock data):
-    - "Total Clients: 24"
-    - "Upcoming Sessions: 12"
-    - "Revenue This Month: €1,240"
-  - "Clients" section — hardcoded list of 3–4 mock client entries (name, email, role badge, status)
-  - "Recent Bookings" section — 3–4 mock booking entries
-- Logout button in the header
+```typescript
+interface AuthContextValue {
+  user: User | null
+  profile: Profile | null
+  isLoading: boolean
+  signIn: (email: string, password: string) => Promise<...>
+  signUp: (email: string, password: string, fullName: string) => Promise<...>
+  signOut: () => Promise<void>
+  isAdmin: boolean
+  isClient: boolean
+}
+```
 
-### `src/routes/admin/_layout.tsx`
+### TanStack Router Context
 
-Minimal admin layout wrapper:
-- Sidebar or top nav with: Dashboard link, Logout button
-- Dark theme consistent with existing brand
-- Outlet for child routes
+In `__root.tsx`, extend router context with auth via `createRootRouteWithContext`:
+
+```typescript
+import { createRootRouteWithContext } from '@tanstack/react-router'
+
+interface RouterContext {
+  user: User | null
+  profile: Profile | null
+}
+
+export const Route = createRootRouteWithContext<RouterContext>()({...})
+```
+
+### `src/components/auth/AuthGuard.tsx`
+
+Wrapper component that checks authentication and role:
+
+| Prop | Behavior |
+|------|----------|
+| `requireAuth` | Redirect to `/login` if not authenticated |
+| `requireAdmin` | Redirect to `/` if not admin |
+| `requireClient` | Redirect if role is `'user'` (no bookings yet) |
+
+Banned users (`role = 'banned'`) are blocked from all authenticated pages.
 
 ---
 
-## Step 6 — Mock User Dashboard
+## Step 6 — Mockup Dashboards
 
-### `src/routes/dashboard.tsx`
+Build lightweight dashboards to test auth, role definitions, and routing. These are **mockups** — they display hardcoded info and role-based views rather than full CRUD.
 
-A lightweight mockup to verify that regular users (role `user` or `client`) can access their area.
+### Admin Dashboard (`/admin`)
 
-- Route: `/dashboard`
-- **Auth guard at top of component**: fetch current session + profile. If not authenticated, redirect to `/login`.
-- If user is banned, show "Account suspended" message and redirect.
-- Page contents:
-  - Heading: "My Dashboard"
-  - Profile summary card: name, email, role badge
-  - "My Bookings" section — hardcoded mock data (2–3 entries)
-  - "Upcoming Sessions" section — hardcoded mock data (2 entries)
-- Logout button in the header
+- Route: `src/routes/_admin/admin/index.tsx`
+- Guarded by `requireAdmin`
+- Shows:
+  - "Admin Dashboard" heading with `RoleBadge`
+  - Stats cards placeholder (total users, total sessions, etc.)
+  - A list of all `profiles` fetched from Supabase (name, email, role)
+  - A "Manual role change" section where admin can see users and their roles
+- Sidebar nav with links to future admin sections (placeholder links)
+
+### User Dashboard (`/dashboard`)
+
+- Route: `src/routes/_user/dashboard.tsx`
+- Guarded by `requireAuth`
+- Shows:
+  - "My Dashboard" heading
+  - Current user's profile info (name, email, role)
+  - Role-specific messaging:
+    - `user` role: "Welcome! Book your first session to become a client."
+    - `client` role: "View your bookings and manage your profile."
+    - `admin` role: Link to `/admin` dashboard
+
+### Route Structure
+
+```
+__root.tsx                    — QueryClientProvider + AuthProvider + Toaster
+├── index.tsx                 — public landing page
+├── login.tsx                 — public
+├── signup.tsx                — public
+├── logout.tsx                — public (auto-logout)
+├── _user/                    — auth-gated layout
+│   ├── _layout.tsx
+│   └── dashboard.tsx         — user dashboard (all roles)
+├── _admin/                   — admin-gated layout
+│   └── admin/
+│       ├── _layout.tsx       — admin sidebar layout
+│       └── index.tsx         — admin dashboard
+```
 
 ---
 
-## Step 7 — Manual Admin Creation on Supabase Dashboard
+## Admin User Setup (Manual)
 
-Once all migrations and pages are in place, create the admin user directly through the Supabase Dashboard:
+Once migrations are applied and the app is running:
 
-1. Go to **Authentication → Users** in the Supabase Dashboard
-2. Click **"Add User"** → manually create a user with email + password
-3. Copy the new user's `id` (UUID)
-4. Go to **SQL Editor** and run:
-   ```sql
-   UPDATE profiles
-   SET role = 'admin'
-   WHERE id = '<user-uuid>';
-   ```
-5. Verify by logging in at `/login` with the admin credentials — should redirect to `/admin/dashboard`
+1. Go to **Supabase Dashboard** → **Authentication** → **Users**
+2. Click "Add User" and create an admin account with email + password
+3. Copy the new user's `id` (UUID) from the table
+4. Run this SQL in **Supabase SQL Editor** to promote them to admin:
+
+```sql
+UPDATE profiles
+SET role = 'admin'
+WHERE id = '<user-uuid>';
+```
+
+This manually seeded admin can then sign in and access `/admin`.
+
+---
+
+## Role Management Reference
+
+| Event | Action |
+|-------|--------|
+| User signs up | Profile created with `role='user'` via `handle_new_user` trigger |
+| Admin promotes user | Admin sets `role='admin'` via Supabase dashboard SQL or future UI |
+| Admin bans user | `role='banned'`, `banned_at=now()`, `ban_reason` set |
+| Admin unbans user | Role restored to previous (`user` or `client`) |
+| User books first session | Trigger promotes `user` → `client` *(future phase)* |
 
 ---
 
@@ -374,15 +398,25 @@ src/
     supabase/
       client.ts
       server.ts
+      middleware.ts
     supabase-types.ts
+  providers/
+    auth-provider.tsx
+  components/
+    auth/
+      AuthGuard.tsx
   routes/
-    signup.tsx               — new
-    login.tsx                — new
-    logout.tsx               — new
-    dashboard.tsx            — new (user dashboard mockup)
-    admin/
-      _layout.tsx            — new (admin layout)
-      dashboard.tsx          — new (admin dashboard mockup)
+    __root.tsx              — updated with auth context
+    login.tsx               — new
+    signup.tsx              — new
+    logout.tsx              — new
+    _user/
+      _layout.tsx           — auth-gated layout
+      dashboard.tsx         — user dashboard
+    _admin/
+      admin/
+        _layout.tsx         — admin sidebar layout
+        index.tsx           — admin dashboard (role test)
 
 supabase/
   migrations/
@@ -396,13 +430,15 @@ supabase/
 ## Verification Checklist
 
 - [ ] All 3 migrations run successfully against a fresh Supabase branch
-- [ ] `supabase gen types` produces valid TypeScript types
-- [ ] `/signup` creates a Supabase auth user + `profiles` row with `role='user'`
-- [ ] `/login` authenticates and redirects based on role (user → `/dashboard`, admin → `/admin/dashboard`)
-- [ ] `/logout` signs out and redirects to `/`
-- [ ] Banned users cannot access `/dashboard` or `/admin/dashboard`
-- [ ] User dashboard shows mock data and profile info
-- [ ] Admin dashboard shows mock stats, clients, and bookings
-- [ ] Admin user can be manually created via Supabase Dashboard + SQL
+- [ ] Auth: signup creates profile row with `role='user'`, login returns session, logout clears session
+- [ ] RLS: user reads own profile only; admin reads all profiles
+- [ ] Signup page creates auth user + profile, redirects to `/`
+- [ ] Login page redirects to `/` on success
+- [ ] Logout page signs out and redirects to `/`
+- [ ] Manual admin user created via Supabase dashboard + SQL role update
+- [ ] Admin dashboard (`/admin`) accessible only to `role='admin'` users
+- [ ] User dashboard (`/dashboard`) accessible to all authenticated users
+- [ ] Role-specific messaging shown correctly per role (`user`, `client`, `admin`, `banned`)
+- [ ] Banned users cannot access authenticated routes
 - [ ] Toast notifications appear top-left for all auth actions
-- [ ] TypeScript compiles cleanly with no errors
+- [ ] TypeScript types generated and compile cleanly
