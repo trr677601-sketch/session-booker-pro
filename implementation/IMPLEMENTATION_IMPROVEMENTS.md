@@ -151,3 +151,4 @@ Add a small, fixed bottom bar on mobile with a single "Book Your Session" CTA.
 | 8 | Active Section Nav Highlight | ☐ |
 | 9 | Prune Unused shadcn | ☐ |
 | 10 | Sticky Mobile Bottom Bar | ☐ |
+| B1 | Auth & User Profiles (Backend Phase 1) | ◐ |
